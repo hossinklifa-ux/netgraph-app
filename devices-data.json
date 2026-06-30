@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    { "id": "السيرفر الرئيسي", "type": "server" },
+    { "id": "راوتر 1", "type": "router" },
+    { "id": "راوتر 2", "type": "router" },
+    { "id": "كاميرا 1", "type": "camera" },
+    { "id": "كاميرا 2", "type": "camera" },
+    { "id": "نقطة وصول WiFi", "type": "access_point" },
+    { "id": "طابعة", "type": "printer" }
+  ],
+  "links": [
+    { "source": "السيرفر الرئيسي", "target": "راوتر 1" },
+    { "source": "السيرفر الرئيسي", "target": "راوتر 2" },
+    { "source": "راوتر 1", "target": "كاميرا 1" },
+    { "source": "راوتر 1", "target": "كاميرا 2" },
+    { "source": "راوتر 2", "target": "نقطة وصول WiFi" },
+    { "source": "نقطة وصول WiFi", "target": "طابعة" }
+  ]
+}
