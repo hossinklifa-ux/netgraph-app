@@ -1,100 +1,334 @@
+cat > /mnt/user-data/outputs/network-demo-v4-dashboard.html << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>شبكة الأجهزة المتصلة - تحديث لحظي</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGraph - لوحة تحكم الشبكة</title>
 <style>
-  body {
-    background: #0d1117;
-    color: #e6edf3;
-    font-family: 'Tahoma', sans-serif;
-    margin: 0;
-    padding: 20px;
-    text-align: center;
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #e6edf3; font-family: 'Tahoma', sans-serif; }
+
+  /* الهيدر */
+  header {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
-  h1 { font-size: 22px; margin-bottom: 5px; }
-  p.sub { color: #8b949e; margin-top: 0; font-size: 14px; }
+  header h1 { font-size: 18px; color: #58a6ff; }
+  #clock { font-size: 13px; color: #8b949e; }
+
+  /* بطاقات الإحصائيات */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 14px 16px;
+  }
+  .stat-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    transition: border-color 0.3s;
+  }
+  .stat-card .number { font-size: 28px; font-weight: bold; }
+  .stat-card .label { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  .stat-card.online  { border-color: #3fb950; }
+  .stat-card.offline { border-color: #f85149; }
+  .stat-card.warning { border-color: #d29922; }
+  .stat-card.total   { border-color: #58a6ff; }
+  .online  .number { color: #3fb950; }
+  .offline .number { color: #f85149; }
+  .warning .number { color: #d29922; }
+  .total   .number { color: #58a6ff; }
+
+  /* شريط البحث والفلترة */
+  .controls {
+    padding: 0 16px 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .search-box {
+    flex: 1;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #e6edf3;
+    font-size: 13px;
+    min-width: 140px;
+  }
+  .search-box:focus { outline: none; border-color: #58a6ff; }
+  .filter-btn {
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #8b949e;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-btn.active { background: #1f6feb; border-color: #58a6ff; color: white; }
+
+  /* منطقة الرسم */
   #graph {
     width: 100%;
-    max-width: 700px;
-    height: 480px;
-    margin: 20px auto;
+    height: 340px;
     background: #161b22;
-    border-radius: 12px;
-    border: 1px solid #30363d;
+    border-top: 1px solid #30363d;
+    border-bottom: 1px solid #30363d;
   }
-  .node circle { stroke-width: 3px; cursor: pointer; transition: stroke 0.4s ease, fill 0.4s ease; }
-  .node text { fill: #e6edf3; font-size: 11px; text-anchor: middle; pointer-events: none; }
-  .link { stroke: #3fb950; stroke-width: 2px; opacity: 0.6; transition: stroke 0.4s ease; }
-  .link.offline { stroke: #6e7681; opacity: 0.2; }
-  #info { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px; max-width: 700px; margin: 0 auto 10px; font-size: 14px; min-height: 20px; }
-  #status-bar { font-size: 13px; color: #3fb950; margin-bottom: 10px; }
-  #legend { font-size: 12px; color: #8b949e; margin-top: 8px; }
-  #legend span { margin: 0 10px; }
-  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-left:4px; vertical-align:middle; }
+
+  /* التحذيرات */
+  #alerts {
+    padding: 10px 16px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .alert-item {
+    background: #161b22;
+    border-right: 3px solid #f85149;
+    border-radius: 6px;
+    padding: 7px 10px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    animation: slideIn 0.3s ease;
+  }
+  .alert-item.warning { border-right-color: #d29922; }
+  .alert-item.online  { border-right-color: #3fb950; }
+  @keyframes slideIn { from { opacity:0; transform: translateX(10px); } to { opacity:1; transform: translateX(0); } }
+  .alert-time { color: #8b949e; font-size: 11px; }
+
+  /* شريط الحالة */
+  #status-bar {
+    padding: 8px 16px;
+    font-size: 12px;
+    color: #8b949e;
+    border-top: 1px solid #30363d;
+    display: flex;
+    justify-content: space-between;
+  }
+  .pulse { display: inline-block; width: 8px; height: 8px; background: #3fb950; border-radius: 50%; margin-left: 5px; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
+
+  .node circle { cursor: pointer; transition: fill 0.4s, stroke 0.4s; }
+  .node text { fill: #e6edf3; font-size: 10px; text-anchor: middle; pointer-events: none; }
+  .link { stroke-width: 2px; opacity: 0.6; transition: stroke 0.4s, opacity 0.4s; }
+  .link.offline { stroke: #6e7681 !important; opacity: 0.15; }
+  .node.hidden { display: none; }
 </style>
 </head>
 <body>
-  <h1>🟢 شبكة الأجهزة المتصلة</h1>
-  <p class="sub">الأجهزة تتحدث حالتها كل 3 ثوان بدون إعادة تحميل</p>
-  <div id="status-bar">⏳ بانتظار أول تحديث...</div>
-  <div id="info">اضغط على أي جهاز لمعرفة تفاصيله</div>
-  <svg id="graph"></svg>
-  <div id="legend">
-    <span><span class="dot" style="background:#3fb950"></span>متصل</span>
-    <span><span class="dot" style="background:#6e7681"></span>غير متصل</span>
+
+<header>
+  <h1>🌐 NetGraph — لوحة المراقبة</h1>
+  <span id="clock"></span>
+</header>
+
+<!-- إحصائيات -->
+<div class="stats">
+  <div class="stat-card total">
+    <div class="number" id="stat-total">0</div>
+    <div class="label">إجمالي الأجهزة</div>
   </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-  <script>
-    const data = {
-      nodes: [
-        { id: "السيرفر الرئيسي", type: "server", status: "online" },
-        { id: "راوتر 1", type: "router", status: "online" },
-        { id: "راوتر 2", type: "router", status: "online" },
-        { id: "كاميرا 1", type: "camera", status: "online" },
-        { id: "كاميرا 2", type: "camera", status: "online" },
-        { id: "نقطة وصول WiFi", type: "access_point", status: "online" },
-        { id: "طابعة", type: "printer", status: "online" }
-      ],
-      links: [
-        { source: "السيرفر الرئيسي", target: "راوتر 1" },
-        { source: "السيرفر الرئيسي", target: "راوتر 2" },
-        { source: "راوتر 1", target: "كاميرا 1" },
-        { source: "راوتر 1", target: "كاميرا 2" },
-        { source: "راوتر 2", target: "نقطة وصول WiFi" },
-        { source: "نقطة وصول WiFi", target: "طابعة" }
-      ]
-    };
-    const svg = d3.select("#graph");
-    const width = svg.node().clientWidth;
-    const height = svg.node().clientHeight;
-    const simulation = d3.forceSimulation(data.nodes)
-      .force("link", d3.forceLink(data.links).id(d => d.id).distance(130))
-      .force("charge", d3.forceManyBody().strength(-350))
-      .force("center", d3.forceCenter(width / 2, height / 2));
-    const link = svg.append("g").selectAll("line").data(data.links).join("line").attr("class", "link");
-    const node = svg.append("g").selectAll("g").data(data.nodes).join("g").attr("class", "node")
-      .call(d3.drag()
-        .on("start", (e,d) => { if(!e.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
-        .on("drag", (e,d) => { d.fx=e.x; d.fy=e.y; })
-        .on("end", (e,d) => { if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
-    node.append("circle").attr("r", 20).attr("fill", "#3fb950").attr("stroke", "#0d1117");
-    node.append("text").attr("dy", -28).text(d => d.id);
-    node.on("click", (e,d) => {
-      document.getElementById("info").innerText = "📟 " + d.id + " | " + d.type + " | " + (d.status==="online"?"متصل 🟢":"غير متصل ⚪");
+  <div class="stat-card online">
+    <div class="number" id="stat-online">0</div>
+    <div class="label">متصل</div>
+  </div>
+  <div class="stat-card warning">
+    <div class="number" id="stat-warning">0</div>
+    <div class="label">تحذير</div>
+  </div>
+  <div class="stat-card offline">
+    <div class="number" id="stat-offline">0</div>
+    <div class="label">غير متصل</div>
+  </div>
+</div>
+
+<!-- بحث وفلترة -->
+<div class="controls">
+  <input class="search-box" id="search" type="text" placeholder="🔍 ابحث عن جهاز...">
+  <button class="filter-btn active" data-filter="all">الكل</button>
+  <button class="filter-btn" data-filter="online">متصل</button>
+  <button class="filter-btn" data-filter="offline">غير متصل</button>
+  <button class="filter-btn" data-filter="warning">تحذير</button>
+</div>
+
+<!-- الرسم -->
+<svg id="graph"></svg>
+
+<!-- التحذيرات -->
+<div id="alerts"></div>
+
+<!-- شريط الحالة -->
+<div id="status-bar">
+  <span><span class="pulse"></span> تحديث تلقائي كل 3 ثوان</span>
+  <span id="last-update">--</span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+  // ===== البيانات =====
+  const data = {
+    nodes: [
+      { id: "السيرفر الرئيسي", type: "server",       status: "online" },
+      { id: "راوتر 1",         type: "router",       status: "online" },
+      { id: "راوتر 2",         type: "router",       status: "online" },
+      { id: "كاميرا 1",        type: "camera",       status: "online" },
+      { id: "كاميرا 2",        type: "camera",       status: "online" },
+      { id: "نقطة وصول WiFi",  type: "access_point", status: "online" },
+      { id: "طابعة",           type: "printer",      status: "online" },
+      { id: "سيرفر احتياطي",   type: "server",       status: "warning" },
+      { id: "كاميرا 3",        type: "camera",       status: "offline" },
+      { id: "راوتر 3",         type: "router",       status: "online" }
+    ],
+    links: [
+      { source: "السيرفر الرئيسي", target: "راوتر 1" },
+      { source: "السيرفر الرئيسي", target: "راوتر 2" },
+      { source: "السيرفر الرئيسي", target: "سيرفر احتياطي" },
+      { source: "راوتر 1",         target: "كاميرا 1" },
+      { source: "راوتر 1",         target: "كاميرا 2" },
+      { source: "راوتر 2",         target: "نقطة وصول WiFi" },
+      { source: "راوتر 2",         target: "راوتر 3" },
+      { source: "نقطة وصول WiFi",  target: "طابعة" },
+      { source: "راوتر 3",         target: "كاميرا 3" }
+    ]
+  };
+
+  const colors = { online: "#3fb950", offline: "#6e7681", warning: "#d29922" };
+  const alerts = [];
+  let activeFilter = "all";
+  let searchTerm = "";
+
+  // ===== الساعة =====
+  function updateClock() {
+    document.getElementById("clock").textContent = new Date().toLocaleTimeString("ar-SA");
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ===== الرسم =====
+  const svg = d3.select("#graph");
+  const width = svg.node().clientWidth;
+  const height = svg.node().clientHeight;
+
+  const simulation = d3.forceSimulation(data.nodes)
+    .force("link", d3.forceLink(data.links).id(d => d.id).distance(110))
+    .force("charge", d3.forceManyBody().strength(-300))
+    .force("center", d3.forceCenter(width / 2, height / 2));
+
+  const linkEl = svg.append("g").selectAll("line")
+    .data(data.links).join("line").attr("class", "link")
+    .attr("stroke", "#3fb950");
+
+  const nodeEl = svg.append("g").selectAll("g")
+    .data(data.nodes).join("g").attr("class", "node")
+    .call(d3.drag()
+      .on("start", (e,d) => { if(!e.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on("drag",  (e,d) => { d.fx=e.x; d.fy=e.y; })
+      .on("end",   (e,d) => { if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  nodeEl.append("circle").attr("r", 18)
+    .attr("fill", d => colors[d.status])
+    .attr("stroke", "#0d1117").attr("stroke-width", 2);
+
+  nodeEl.append("text").attr("dy", -26).text(d => d.id);
+
+  nodeEl.on("click", (e, d) => addAlert(`تم اختيار: ${d.id}`, d.status));
+
+  simulation.on("tick", () => {
+    linkEl.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y)
+          .attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+    nodeEl.attr("transform", d=>`translate(${d.x},${d.y})`);
+  });
+
+  // ===== تحديث الإحصائيات =====
+  function updateStats() {
+    const online  = data.nodes.filter(n=>n.status==="online").length;
+    const offline = data.nodes.filter(n=>n.status==="offline").length;
+    const warning = data.nodes.filter(n=>n.status==="warning").length;
+    document.getElementById("stat-total").textContent   = data.nodes.length;
+    document.getElementById("stat-online").textContent  = online;
+    document.getElementById("stat-offline").textContent = offline;
+    document.getElementById("stat-warning").textContent = warning;
+  }
+
+  // ===== إضافة تحذير =====
+  function addAlert(msg, type="offline") {
+    const div = document.getElementById("alerts");
+    const time = new Date().toLocaleTimeString("ar-SA");
+    const icon = type==="offline"?"🔴" : type==="warning"?"🟡":"🟢";
+    const item = document.createElement("div");
+    item.className = `alert-item ${type}`;
+    item.innerHTML = `<span>${icon} ${msg}</span><span class="alert-time">${time}</span>`;
+    div.insertBefore(item, div.firstChild);
+    if(div.children.length > 5) div.removeChild(div.lastChild);
+  }
+
+  // ===== الفلترة والبحث =====
+  function applyFilter() {
+    nodeEl.each(function(d) {
+      const matchFilter = activeFilter==="all" || d.status===activeFilter;
+      const matchSearch = d.id.includes(searchTerm);
+      d3.select(this).classed("hidden", !(matchFilter && matchSearch));
     });
-    simulation.on("tick", () => {
-      link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
-      node.attr("transform", d=>`translate(${d.x},${d.y})`);
+    linkEl.style("opacity", d => {
+      const sf = activeFilter==="all" || d.source.status===activeFilter;
+      const tf = activeFilter==="all" || d.target.status===activeFilter;
+      return (sf && tf) ? 0.6 : 0.05;
     });
-    function refreshStatus() {
-      const r = data.nodes[Math.floor(Math.random()*data.nodes.length)];
-      r.status = r.status==="online"?"offline":"online";
-      node.select("circle").attr("fill", d=>d.status==="online"?"#3fb950":"#6e7681");
-      link.attr("class", d=>"link"+(d.source.status==="offline"||d.target.status==="offline"?" offline":""));
-      document.getElementById("status-bar").innerText = "🔄 " + new Date().toLocaleTimeString("ar-SA") + " — تغيّرت حالة: " + r.id;
+  }
+
+  document.getElementById("search").addEventListener("input", e => {
+    searchTerm = e.target.value;
+    applyFilter();
+  });
+
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      activeFilter = btn.dataset.filter;
+      applyFilter();
+    });
+  });
+
+  // ===== التحديث التلقائي =====
+  function autoUpdate() {
+    const node = data.nodes[Math.floor(Math.random()*data.nodes.length)];
+    const oldStatus = node.status;
+    const statuses = ["online","online","online","offline","warning"];
+    node.status = statuses[Math.floor(Math.random()*statuses.length)];
+
+    nodeEl.select("circle").attr("fill", d => colors[d.status]);
+    linkEl.attr("class", d =>
+      "link"+(d.source.status==="offline"||d.target.status==="offline"?" offline":""));
+
+    if(oldStatus !== node.status) {
+      const msgs = { offline:"انقطع الاتصال", warning:"تحذير من الجهاز", online:"عاد للاتصال" };
+      addAlert(`${node.id}: ${msgs[node.status]}`, node.status);
     }
-    setInterval(refreshStatus, 3000);
-  </script>
+
+    updateStats();
+    applyFilter();
+    document.getElementById("last-update").textContent =
+      "آخر تحديث: " + new Date().toLocaleTimeString("ar-SA");
+  }
+
+  updateStats();
+  addAlert("النظام يعمل بشكل طبيعي", "online");
+  setInterval(autoUpdate, 3000);
+</script>
 </body>
 </html>
+HTMLEOF
+echo "تم إنشاء الملف"
