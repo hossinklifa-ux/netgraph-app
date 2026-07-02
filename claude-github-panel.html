@@ -1,11 +1,91 @@
-{
-  "nodes": [
-    { "id": "السيرفر الرئيسي", "type": "server" },
-    { "id": "راوتر 1", "type": "router" },
-    { "id": "سويتش جديد", "type": "router" }
-  ],
-  "links": [
-    { "source": "السيرفر الرئيسي", "target": "راوتر 1" },
-    { "source": "راوتر 1", "target": "سويتش جديد" }
-  ]
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة Claude-GitHub</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#e6edf3;font-family:Tahoma,sans-serif;padding:20px}
+h1{color:#58a6ff;font-size:20px;margin-bottom:6px}
+p.sub{color:#8b949e;font-size:13px;margin-bottom:20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:14px}
+label{font-size:13px;color:#8b949e;display:block;margin-bottom:6px}
+input,textarea,select{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;color:#e6edf3;font-size:13px;font-family:monospace}
+input:focus,textarea:focus{outline:none;border-color:#58a6ff}
+textarea{min-height:180px;resize:vertical}
+.btn{width:100%;padding:12px;border-radius:8px;border:none;font-size:15px;font-weight:bold;cursor:pointer;margin-top:8px}
+.btn-primary{background:#1f6feb;color:white}
+.btn-primary:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
+#status{margin-top:14px;padding:12px;border-radius:8px;font-size:13px;display:none;white-space:pre-line}
+.success{background:#0f2a1d;border:1px solid #3fb950;color:#3fb950}
+.error{background:#2a0f0f;border:1px solid #f85149;color:#f85149}
+.loading{background:#0d1a2e;border:1px solid #58a6ff;color:#58a6ff}
+.step{font-size:12px;color:#58a6ff;margin-bottom:8px;font-weight:bold}
+hr{border:none;border-top:1px solid #30363d;margin:6px 0 12px}
+.token-wrap{position:relative}
+.toggle-token{position:absolute;left:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#8b949e;cursor:pointer;font-size:16px}
+.token-wrap input{padding-left:36px}
+</style>
+</head>
+<body>
+<h1>🤖 لوحة Claude-GitHub</h1>
+<p class="sub">عدّل ملفات مشروعك مباشرة بدون Termux أو nano</p>
+<div class="card">
+<div class="step">① معلومات الاتصال</div><hr>
+<label>GitHub Token</label>
+<div class="token-wrap">
+<input type="password" id="token" placeholder="ghp_...">
+<button class="toggle-token" onclick="document.getElementById('token').type=document.getElementById('token').type=='password'?'text':'password'">👁</button>
+</div>
+<br>
+<label>اسم المستخدم / المستودع</label>
+<input type="text" id="repo" value="hossinklifa-ux/netgraph-app">
+</div>
+<div class="card">
+<div class="step">② الملف المراد تعديله</div><hr>
+<label>اسم الملف</label>
+<select id="filename">
+<option value="devices-data.json">devices-data.json</option>
+<option value="index.html">index.html</option>
+<option value="README.md">README.md</option>
+</select>
+<br><br>
+<label>المحتوى الجديد</label>
+<textarea id="content" placeholder="الصق المحتوى الجديد هنا..."></textarea>
+<br>
+<label>رسالة التعديل</label>
+<input type="text" id="message" value="🤖 تحديث من لوحة Claude-GitHub">
+</div>
+<button class="btn btn-primary" id="sendBtn" onclick="sendUpdate()">🚀 أرسل التعديل لـ GitHub</button>
+<div id="status"></div>
+<script>
+async function sendUpdate(){
+const token=document.getElementById("token").value.trim();
+const repo=document.getElementById("repo").value.trim();
+const filename=document.getElementById("filename").value;
+const content=document.getElementById("content").value;
+const message=document.getElementById("message").value;
+const btn=document.getElementById("sendBtn");
+const status=document.getElementById("status");
+if(!token||!repo||!content){showStatus("⚠️ يرجى تعبئة جميع الحقول","error");return;}
+btn.disabled=true;
+showStatus("⏳ جاري الاتصال بـ GitHub...","loading");
+try{
+const getRes=await fetch("https://api.github.com/repos/"+repo+"/contents/"+filename,{headers:{"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json"}});
+let sha=null;
+if(getRes.ok){const d=await getRes.json();sha=d.sha;}
+const body={message:message,content:btoa(unescape(encodeURIComponent(content)))};
+if(sha)body.sha=sha;
+const putRes=await fetch("https://api.github.com/repos/"+repo+"/contents/"+filename,{method:"PUT",headers:{"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify(body)});
+if(putRes.ok){const d=await putRes.json();showStatus("✅ تم! الملف تحدّث على GitHub
+🔗 Commit: "+d.commit.sha.substring(0,7)+"
+⏱ الموقع يتحدث خلال دقيقة...","success");}
+else{const e=await putRes.json();showStatus("❌ خطأ: "+e.message,"error");}
+}catch(e){showStatus("❌ خطأ في الاتصال: "+e.message,"error");}
+btn.disabled=false;
 }
+function showStatus(msg,type){const s=document.getElementById("status");s.textContent=msg;s.className=type;s.style.display="block";}
+</script>
+</body>
+</html>
