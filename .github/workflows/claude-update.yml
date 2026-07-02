@@ -1,0 +1,26 @@
+name: Claude Auto Update
+
+on:
+  repository_dispatch:
+    types: [claude-update]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply Claude's changes
+        run: |
+          echo "${{ github.event.client_payload.content }}" > ${{ github.event.client_payload.filename }}
+
+      - name: Commit and push
+        run: |
+          git config user.name "Claude Bot"
+          git config user.email "claude@bot.com"
+          git add .
+          git commit -m "🤖 تحديث تلقائي من Claude"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.CLAUDE_GITHUB_TOKEN }}
